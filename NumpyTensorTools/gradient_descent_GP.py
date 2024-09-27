@@ -374,6 +374,8 @@ def gradient_descent_GP_MPS (nsweep, mps, mpo, g, step_size, niter=1, maxdim=100
 
                     A = mps[p]
                     mps[p], grad, step_size = gradient_descent_GP (func2, mps[p], step_size=step_size, linesearch=linesearch)
+                    if step_size < 1e-6:
+                        step_size = 1e-6
                     en = np.inner (grad.conj().flatten(), A.flatten())
 
                     func2.move (step_size)

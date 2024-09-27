@@ -1,5 +1,5 @@
 import os, sys 
-sys.path.append('/home/jerrychen/Desktop/GP_project/xfac/build/python/')
+sys.path.append('/home/jerrychen/Desktop/My_Work/TN_Numerical/qtt_jerry/xfac_newest/build/python/')
 import xfacpy
 import numpy as np
 import cmath
@@ -29,7 +29,7 @@ def fitfun (inds):
 def xfac_to_npmps (mpsX, nsite):
   mps = [None for i in range(nsite)]
   for it in range(nsite):
-    mps[it] = mpsX.get(it)
+    mps[it] = mpsX.core[it]
   return mps 
 
 def tci (fun, length, phys_dim, maxdim, tol=1e-12, cplx=True, chk=False):

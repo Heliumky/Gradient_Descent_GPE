@@ -35,10 +35,10 @@ def fit_psi_sqr (psi, psi2, maxdim, cutoff=1e-16):
     #print_overlap (psi2_exact, fit)
     return fit
 
-def make_H_GP (H0, psi, psi2, g, maxdim):
+def make_H_GP (H0, psi, psi2, g, maxdim, cutoff_mps2):
     #t1 = time.time()                                # time
    # psi2 = psi_sqr (psi)
-    psi2 = fit_psi_sqr(psi, psi2, maxdim = maxdim, cutoff = cutoff)
+    psi2 = fit_psi_sqr(psi, psi2, maxdim = 1000000, cutoff = cutoff_mps2)
    # for i in range(len(psi2)):
    #     print(psi2[i].shape)
    # t2 = time.time()                                # time
@@ -47,27 +47,58 @@ def make_H_GP (H0, psi, psi2, g, maxdim):
     H_psi = qtt.MPS_to_MPO (psi2)
     H_psi[0] *= g
     H = npmps.sum_2MPO (H0, H_psi)
-    H = npmps.svd_compress_MPO (H, cutoff=1e-12)
+    #H = npmps.svd_compress_MPO (H, cutoff=1e-12)
     return H, psi2
 
-def imag_time_evol (H0, psi, g, dt, steps, maxdim, cutoff=1e-12, krylovDim=10):
+def imag_time_evol (H0, psi, g, dt, steps, maxdim, cutoff_mps=1e-12, cutoff_mps2=1e-2, krylovDim=10):
     psi = copy.copy(psi)
     psi2 = psi_sqr (psi)
     enss = []
     ts = []
     t11 = time.time()
+    psi2_dim = []
     for n in range(steps):
         t1 = time.time()                                # timedx
         # Update the Hamiltonian
-        H, psi2 = make_H_GP (H0, psi, psi2, g, maxdim=maxdim)
+        H, psi2 = make_H_GP (H0, psi, psi2, g, maxdim=1000000, cutoff_mps2 = cutoff_mps2)
         # TDVP
-        psi, ens, terrs = dmrg.tdvp (1, psi, H, dt, [maxdim], cutoff=cutoff, krylovDim=krylovDim, verbose=False)
+        psi2_dim.append(np.max(npmps.MPS_dims(psi2)))
+        psi, ens, terrs = dmrg.tdvp (2, psi, H, dt, [maxdim], cutoff=cutoff_mps, krylovDim=krylovDim, verbose=False)
         en = np.abs(ens[-1])
         enss.append(np.real(en))
         #print('TDVP',n,en)
         #print("inner E = ",np.abs(npmps.inner_MPO (psi, psi, H)))
         t2 = time.time()                                # time
         print('imag time evol time',(t2-t1))                      # time
+        t22 = time.time()
+        ts.append(t22-t11)
+    np.savetxt('psi2_dim.txt', psi2_dim, fmt='%d')
+    return psi, enss, ts
+
+def DMRG_evol (H0, psi, g, nsweep, steps, maxdim, cutoff_mps=1e-12, cutoff_mps2=1e-12, krylovDim=10):
+    psi = copy.copy(psi)
+    psi2 = psi_sqr (psi)
+    H0_2 = copy.copy(H0)
+    H0_2[0] = 2 * H0_2[0]
+    enss = []
+    ts = []
+    t11 = time.time()
+    for n in range(steps):
+        t1 = time.time()                                # timedx
+        # Update the Hamiltonian
+        H, psi2 = make_H_GP (H0_2, psi, psi2, g, maxdim=maxdim, cutoff_mps2 = cutoff_mps2)
+        H_cor, psi2_cache = make_H_GP (H0, psi, psi2, g, maxdim=maxdim, cutoff_mps2 = cutoff_mps2)
+        en = npmps.inner_MPO(psi,psi,H_cor) 
+        # DMRG
+        psi, ens, terrs = dmrg.dmrg (2, psi, H, nsweep, [maxdim], cutoff=cutoff_mps, krylovDim=krylovDim, verbose=False)
+        #print(npmps.inner_MPS(psi,psi))  
+        #psi = npmps.normalize_MPS (psi)
+        #en = np.abs(ens[-1]) 
+        enss.append(np.real(en))
+        #print('DMRG',n,en)
+        #print("inner E = ",np.abs(npmps.inner_MPO (psi, psi, H)))
+        t2 = time.time()                                # time
+        print('DMRG evol time',(t2-t1))                      # time
         t22 = time.time()
         ts.append(t22-t11)
 
@@ -142,6 +173,12 @@ def get_init_state (N, x1, x2, maxdim):
     mps = npmps.normalize_MPS (mps)
     return mps    
 
+def get_init_rand_state (N, x1, x2, maxdim, seed = 15):
+    mps = npmps.random_MPS (2*N, 2, vdim=maxdim, seed=seed)
+    #mps = tci.tci (fitfun, 2*N, 2, maxdim=maxdim)
+    mps = npmps.normalize_MPS (mps)
+    return mps  
+
 def check_hermitian (mpo):
     mm = npmps.MPO_to_matrix (mpo)
     t = np.linalg.norm(mm - mm.conj().T)
@@ -172,7 +209,7 @@ if __name__ == '__main__':
     g = 100/dx**2
 
 
-    maxdim = 16
+    maxdim = 10
     cutoff = 1e-12
     krylovDim = 10
 
@@ -193,7 +230,8 @@ if __name__ == '__main__':
     absSqr = np.vectorize(absSqr)
 
     # Initial MPS
-    psi = get_init_state (N, x1, x2, maxdim=maxdim)
+    #psi = get_init_state (N, x1, x2, maxdim=maxdim)
+    psi = get_init_rand_state (N, x1, x2, maxdim=maxdim, seed = 15)
     print('Initial psi dim, before compression:',npmps.MPS_dims(psi))
     psi = npmps.svd_compress_MPS (psi, cutoff=1e-12)
     print('Initial psi dim:',npmps.MPS_dims(psi))
@@ -202,11 +240,19 @@ if __name__ == '__main__':
     # TDVP
     dt = dx**2/2
     print('dt',dt)
-    psi_TDVP, ens_TDVP, ts0 = imag_time_evol (H0, psi, g, dt, steps=0, maxdim=maxdim, cutoff=cutoff, krylovDim=krylovDim)
+    psi_TDVP, ens_TDVP, ts0 = imag_time_evol (H0, psi, g, dt, steps=0, maxdim=maxdim, cutoff_mps=cutoff, cutoff_mps2=1e-10, krylovDim=krylovDim)
     TDVP_CPUTIME = np.column_stack((ts0, ens_TDVP))
     np.savetxt('TDVP_CPUTIME.txt', TDVP_CPUTIME, fmt='%.12f')
     with open('7_vortex_tdvp.pkl', 'wb') as f:
         pickle.dump(psi_TDVP, f)
+
+    #DMRG
+    print('dt',dt)
+    psi_DMRG, ens_DMRG, ts_dmrg = DMRG_evol (H0, psi, g, nsweep = 4, steps = 0, maxdim=maxdim, cutoff_mps=cutoff, cutoff_mps2=1e-12, krylovDim=krylovDim)
+    DMRG_CPUTIME = np.column_stack((ts_dmrg, ens_DMRG))
+    np.savetxt('DMRG_CPUTIME.txt', DMRG_CPUTIME, fmt='%.12f')
+    with open('7_vortex_dmrg.pkl', 'wb') as f:
+        pickle.dump(psi_DMRG, f)
 
     # Gradient descent
     step_size = dt*0.01
@@ -214,7 +260,7 @@ if __name__ == '__main__':
     GD_CPUTIME = np.column_stack((ts1, ens_GD))
     np.savetxt('GD_CPUTIME.txt', GD_CPUTIME, fmt='%.12f')
     # Gradient descent
-    psi_GD2, ens_GD2, ts2 = gradient_descent2 (H0, psi, g, step_size=dt, steps=10000, maxdim=maxdim, cutoff_mps2=1e-8, cutoff_mps = cutoff)
+    psi_GD2, ens_GD2, ts2 = gradient_descent2 (H0, psi, g, step_size=dt, steps=500, maxdim=maxdim, cutoff_mps2=1e-8, cutoff_mps = cutoff)
     GD2_CPUTIME = np.column_stack((ts2, ens_GD2))
     np.savetxt('GD2_CPUTIME.txt', GD2_CPUTIME, fmt='%.12f')
     with open('7_vortex_gd.pkl', 'wb') as f:
@@ -249,21 +295,25 @@ if __name__ == '__main__':
     fig2, ax2 = plt.subplots()
     ax2.plot(range(len(ens_TDVP)), ens_TDVP, label='TDVP step')
     ax2.plot(range(len(ens_GD2)), ens_GD2, label='GD2 step')
+    ax2.plot(range(len(ens_DMRG)), ens_DMRG, label='DMRG step')
     ax2.set_xlabel(r"time step", loc="center")
     ax2.set_ylabel(r"$<\mu(step)>$", loc="center")
     ax2.set_yscale('log')
     ax2.legend()
+    plt.savefig("E_step.pdf", format='pdf')
 
     #en = ens_GD2[-1]        # replace by the exact energy
     fig2, ax2 = plt.subplots()
     ax2.plot(ts0, ens_TDVP, marker='.', label='TDVP Wall time')
     ax2.plot(ts2, ens_GD2, marker='+', label='GD2 Wall time')
+    ax2.plot(ts_dmrg, ens_DMRG, marker='x', label='DMRG Wall time')
     #ax2.plot(ts0, abs(ens_TDVP-en), marker='.', label='TDVP')
     #ax2.plot(ts2, abs(ens_GD2-en), marker='+', label='GD2')
     ax2.set_xlabel(r"Wall time(s)", loc="center")
     ax2.set_ylabel(r"$<\mu(t)>$", loc="center")
     ax2.set_yscale('log')
     ax2.legend()
+    plt.savefig("E_Walltime.pdf", format='pdf')
     #plt.show()
 
     # Plot wavefunction
@@ -295,6 +345,12 @@ if __name__ == '__main__':
     psi_TDVP = qtt.normalize_MPS_by_integral (psi_TDVP, x1, x2, Dim=2)
 
     pltut.plot_2D_proj (psi_TDVP, x1, x2, ax=None, func=absSqr, label='TDVP_proj')
+    
+    
+    #plot the contour of the "|psi(x,y)|**2 via the TDVP method"
+    psi_DMRG = qtt.normalize_MPS_by_integral (psi_DMRG, x1, x2, Dim=2)
+
+    pltut.plot_2D_proj (psi_DMRG, x1, x2, ax=None, func=absSqr, label='DMRG_proj')
 
 
     '''fig, ax = plt.subplots()

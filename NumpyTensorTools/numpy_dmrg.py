@@ -553,7 +553,7 @@ def orthogonalize_MPS_tensor (mps, i, toRight, maxdim=100000000, cutoff=0.):
             res[i-1] = ncon((res[i-1],R), ((-1,-2,1),(1,-3)))
     return res
 
-def dmrg (numCenter, psi, H, maxdims, cutoff, krylovDim=20, verbose=False):
+def dmrg (numCenter, psi, H, nsweep, maxdims, cutoff, krylovDim=20, verbose=False):
     # Check the MPS and the MPO
     assert (len(psi) == len(H))
     npmps.check_MPO_links (H)
@@ -577,50 +577,51 @@ def dmrg (numCenter, psi, H, maxdims, cutoff, krylovDim=20, verbose=False):
     for k in range(len(maxdims)):                                                            # For each sweep
         maxdim = maxdims[k]                                                                     # Read bond dimension
         terr = 0.
-        for lr in [0,1]:
-            for p in ranges[lr]:
-                #
-                #         2                   2      3
-                #         |                   |______|
-                #    1 ---O--- 3   or   1 ---(________)--- 4
-                phi = get_eff_psi (psi, p, numCenter)
-                dims = phi.shape
-                phi = phi.reshape(-1)
+        for s in range(nsweep):
+            for lr in [0,1]:
+                for p in ranges[lr]:
+                    #
+                    #         2                   2      3
+                    #         |                   |______|
+                    #    1 ---O--- 3   or   1 ---(________)--- 4
+                    phi = get_eff_psi (psi, p, numCenter)
+                    dims = phi.shape
+                    phi = phi.reshape(-1)
 
-                # Update the environment tensors
-                if numCenter == 2:
-                    LR.update_LR (psi, psi, H, p, p+1)
-                elif numCenter == 1:
-                    LR.update_LR (psi, psi, H, p)
+                    # Update the environment tensors
+                    if numCenter == 2:
+                        LR.update_LR (psi, psi, H, p, p+1)
+                    elif numCenter == 1:
+                        LR.update_LR (psi, psi, H, p)
 
-                # Define the effective Hamiltonian
-                effH = get_eff_H (LR, H, p, numCenter)
+                    # Define the effective Hamiltonian
+                    effH = get_eff_H (LR, H, p, numCenter)
 
-                # Find the ground state for the current bond
-                en, phi = lanczos.lanczos_ground_state (effH, phi, k=krylovDim, dtype=dtype)
-                phi = phi.reshape(dims)
-                phi = phi / np.linalg.norm(phi)
+                    # Find the ground state for the current bond
+                    en, phi = lanczos.lanczos_ground_state (effH, phi, k=krylovDim, dtype=dtype)
+                    phi = phi.reshape(dims)
+                    phi = phi / np.linalg.norm(phi)
 
-                # Update tensors
-                toRight = (lr==0)
-                if numCenter == 2:
-                    psi[p], psi[p+1], err = npmps.truncate_svd2 (phi, rowrank=2, toRight=toRight, maxdim=maxdim, cutoff=cutoff)
-                    terr += err
-                    LR.delete(p)
-                    LR.delete(p+1)
-                elif numCenter == 1:
-                    psi[p] = phi
-                    psi = orthogonalize_MPS_tensor (psi, p, toRight, maxdim=maxdim, cutoff=cutoff)
-                    LR.delete(p)
-                else:
-                    raise Exception
+                    # Update tensors
+                    toRight = (lr==0)
+                    if numCenter == 2:
+                        psi[p], psi[p+1], err = npmps.truncate_svd2 (phi, rowrank=2, toRight=toRight, maxdim=maxdim, cutoff=cutoff)
+                        terr += err
+                        LR.delete(p)
+                        LR.delete(p+1)
+                    elif numCenter == 1:
+                        psi[p] = phi
+                        psi = orthogonalize_MPS_tensor (psi, p, toRight, maxdim=maxdim, cutoff=cutoff)
+                        LR.delete(p)
+                    else:
+                        raise Exception
 
-        if verbose:
-            print('Sweep',k,', maxdim='+str(maxdim),', MPS dim='+str(max(npmps.MPS_dims(psi))))
-            print('\t','energy =',en, terr)
+            if verbose:
+                print('Sweep',k,', maxdim='+str(maxdim),', MPS dim='+str(max(npmps.MPS_dims(psi))))
+                print('\t','energy =',en, terr)
 
-        ens.append(en);
-        terrs.append (terr/N_update)
+            ens.append(en);
+            terrs.append (terr/N_update)
     return psi, ens, terrs
 
 # Perform exp(-dt*H)|psi> by TDVP

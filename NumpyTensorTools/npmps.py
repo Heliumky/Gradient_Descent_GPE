@@ -211,8 +211,9 @@ def check_MPS_links (mps):
             assert mps[i].shape[1] == mps[0].shape[1]
             assert mps[i].dtype == mps[0].dtype
 
-def random_MPS (N, phydim, vdim=1):
+def random_MPS (N, phydim, seed, vdim=1):
     mps = []
+    np.random.seed(seed)
     for i in range(N):
         if i == 0:
             mps.append (np.random.rand (1, phydim, vdim))
