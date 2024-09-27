@@ -351,7 +351,7 @@ def gradient_descent_GP_MPS (nsweep, mps, mpo, g, step_size, niter=1, maxdim=100
     print_dim (LR4_2)
     exit()'''
 
-    sites = [range(N-1), range(N-1,-1,-1)]
+    sites = [range(N), range(N-1,-1,-1)]
     ens = []
     ts = []
     t1 = time.time()
