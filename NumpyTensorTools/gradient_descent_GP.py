@@ -311,13 +311,13 @@ def gradient_descent_GP (func, x, step_size, linesearch=False, normalize=True):
         return x, grad'''
 
     if linesearch:
-        step_size = gd.line_search (func, step_size=step_size, c1=1e-4, c2=0.9)
+        step_size, f, df = gd.line_search (func, step_size=step_size, c1=1e-4, c2=0.9)
 
     x_next = x + step_size * direction
     if normalize:
         x_next = x_next / np.linalg.norm (x_next)
 
-    return x_next, grad, step_size
+    return x_next, step_size, f, df
 
 # mpo is the non-interacting Hamiltonian
 def gradient_descent_GP_MPS (nsweep, mps, mpo, g, step_size, niter=1, maxdim=100000000, cutoff_mps2 = 1e-16, cutoff_mps = 1e-12 , linesearch=False):
@@ -373,10 +373,15 @@ def gradient_descent_GP_MPS (nsweep, mps, mpo, g, step_size, niter=1, maxdim=100
                     func2 = costf_new.cost_function_GP (LR[p-1], mpo[p], LR[p+1], LR4[p-1], mps[p], LR4[p+1], g)
 
                     A = mps[p]
-                    mps[p], grad, step_size = gradient_descent_GP (func2, mps[p], step_size=step_size, linesearch=linesearch)
-                    en = np.inner (grad.conj().flatten(), A.flatten())
+                    mps[p], step_size, f, df = gradient_descent_GP (func2, mps[p], step_size=step_size, linesearch=linesearch)
 
-                    func2.move (step_size)
+                    grad = func2.env0
+                    en = (np.inner (grad.conj().flatten(), A.flatten())).real
+
+                    if step_size < 1e-6:
+                        step_size = 1e-6
+
+                    #func2.move (step_size)
 
                 mps = dmrg.orthogonalize_MPS_tensor (mps, p, toRight=(lr==0), maxdim=maxdim, cutoff=cutoff_mps)
 
@@ -385,6 +390,6 @@ def gradient_descent_GP_MPS (nsweep, mps, mpo, g, step_size, niter=1, maxdim=100
         ens.append(en)
         t2 = time.time()
         ts.append(t2-t1)
-        print('sweep',s,'en =',en)
+        print('sweep',s,'en =',en,'f =',f,'df =',df,'alpha =',step_size)
     np.savetxt('GD2_psi2_dim.txt', psi2_dim, fmt='%d')
     return mps, ens, ts

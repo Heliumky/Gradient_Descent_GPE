@@ -170,7 +170,7 @@ def line_search (stepf, step_size=1, c1=1e-4, c2=0.9):
 
             # search in the window
             a = search_interval (stepf, a_pre, a, f_pre, f, df_pre, df)
-            return a
+            return a, f, df
 
         # Both sufficient_decrease_condition and curvature_condition are satisfied
         elif curvature_condition (df, df0, c2):
@@ -180,7 +180,7 @@ def line_search (stepf, step_size=1, c1=1e-4, c2=0.9):
                 print('line_search 2')
                 plt.show()
 
-            return a
+            return a, f, df
 
         # sufficient_decrease_condition is satisfied
         # curvature_condition is not satisfied
@@ -193,7 +193,7 @@ def line_search (stepf, step_size=1, c1=1e-4, c2=0.9):
 
             # search in the window
             a = search_interval (stepf, a, a_pre, f, f_pre, df, df_pre)
-            return a
+            return a, f, df
 
         # sufficient_decrease_condition is satisfied
         # curvature_condition is not satisfied
@@ -209,4 +209,4 @@ def line_search (stepf, step_size=1, c1=1e-4, c2=0.9):
                 plt.show()
 
         first_iter = False
-    return a
+    return a, f, df

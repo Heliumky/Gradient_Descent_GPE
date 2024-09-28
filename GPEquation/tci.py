@@ -1,5 +1,6 @@
 import os, sys 
 sys.path.append('/home/jerrychen/Desktop/GP_project/xfac/build/python/')
+sys.path.append('/home/chiamin/project/2023/qtt/JhengWei/INSTALL/xfac/build/python/')
 import xfacpy
 import numpy as np
 import cmath

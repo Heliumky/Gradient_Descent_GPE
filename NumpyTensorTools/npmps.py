@@ -100,7 +100,13 @@ def reshape_tensor_to_matrix (T, rowrank):
 def truncate_svd2 (T, rowrank, toRight, maxdim=100000000, cutoff=0.):
     T, ds1, ds2 = reshape_tensor_to_matrix (T, rowrank)
 
-    U, S, Vh = np.linalg.svd (T, full_matrices=False)
+    try:
+        U, S, Vh = np.linalg.svd (T, full_matrices=False)
+    except np.linalg.LinAlgError:
+        np.save('svd_matrix.npy', T)
+        rr = np.random.uniform(low=1e-14, high=2e-14, size=T.shape)
+        T = T+rr
+        U, S, Vh = np.linalg.svd (T, full_matrices=False)
     # S is in decending order
 
     # Normalized S
